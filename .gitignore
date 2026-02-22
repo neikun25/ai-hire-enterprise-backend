@@ -1,0 +1,22 @@
+# 忽略依赖包
+node_modules/
+pnpm-lock.yaml
+
+# 忽略环境变量（保护隐私！）
+.env
+.env.*
+
+# 忽略构建输出
+dist/
+build/
+
+# 忽略系统文件
+.DS_Store
+Thumbs.db
+
+# 忽略日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

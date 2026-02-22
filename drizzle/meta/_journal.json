@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1770383455941,
+      "tag": "0000_same_marvex",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1770383606075,
+      "tag": "0001_cloudy_puff_adder",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1771426167216,
+      "tag": "0002_damp_george_stacy",
+      "breakpoints": true
+    }
+  ]
+}
