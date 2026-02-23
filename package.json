@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "npx drizzle-kit push && npx tsx server/seed-data.ts && cross-env NODE_ENV=production tsx server/_core/index.ts",
+    "start": "cross-env NODE_ENV=production tsx server/_core/index.ts",
     "dev": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "tsc && vite build",
     "preview": "vite preview",
@@ -25,7 +25,7 @@
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-dialog": "^1.1.4",
-    "@radix-ui/react-dropdown-menu": "^2.1.4",
+    "@radix-ui/react-dropdown-menu": "^2.1.4",  
     "@radix-ui/react-hover-card": "^1.1.15",
     "@radix-ui/react-label": "^2.1.1",
     "@radix-ui/react-menubar": "^1.1.16",
