@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "cross-env NODE_ENV=production tsx server/_core/index.ts",
+    "start": "npx drizzle-kit push && npx tsx server/seed-data.ts && cross-env NODE_ENV=production tsx server/_core/index.ts",
     "dev": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "tsc && vite build",
     "preview": "vite preview",
