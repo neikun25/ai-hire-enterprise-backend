@@ -1,4 +1,5 @@
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal } from "drizzle-orm/mysql-core";
+import { sql } from "drizzle-orm"; // 【关键修复】：引入 sql
 
 /**
  * 用户表 - 支持企业和个人两种角色
@@ -13,9 +14,10 @@ export const users = mysqlTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }),
   // 角色: enterprise(企业) / individual(个人)
   role: mysqlEnum("role", ["enterprise", "individual", "admin"]).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  // 【关键修复】：使用 sql`CURRENT_TIMESTAMP` 兼容 MySQL 5.7
+  createdAt: timestamp("createdAt").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updatedAt").default(sql`CURRENT_TIMESTAMP`).onUpdateNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 /**
@@ -30,8 +32,8 @@ export const enterprises = mysqlTable("enterprises", {
   balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00").notNull(), // 账户余额
   creditScore: decimal("creditScore", { precision: 3, scale: 1 }).default("5.0").notNull(), // 信誉评分
   totalTasks: int("totalTasks").default(0).notNull(), // 发布任务总数
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updatedAt").default(sql`CURRENT_TIMESTAMP`).onUpdateNow().notNull(),
 });
 
 /**
@@ -47,8 +49,8 @@ export const individuals = mysqlTable("individuals", {
   creditScore: decimal("creditScore", { precision: 3, scale: 1 }).default("5.0").notNull(), // 信誉评分
   completedTasks: int("completedTasks").default(0).notNull(), // 完成任务数
   successRate: decimal("successRate", { precision: 5, scale: 2 }).default("100.00").notNull(), // 成功率
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updatedAt").default(sql`CURRENT_TIMESTAMP`).onUpdateNow().notNull(),
 });
 
 /**
@@ -57,24 +59,20 @@ export const individuals = mysqlTable("individuals", {
 export const tasks = mysqlTable("tasks", {
   id: int("id").autoincrement().primaryKey(),
   enterpriseId: int("enterpriseId").notNull(), // 发布企业ID
-  // 任务类型: report(分析报告) / video(短视频制作) / labeling(数据标注)
   type: mysqlEnum("type", ["report", "video", "labeling"]).notNull(),
-  // 子类型(根据type不同而不同)
   subType: varchar("subType", { length: 50 }).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description").notNull(),
   requirements: text("requirements"), // 详细要求
   attachments: text("attachments"), // JSON格式存储附件URL数组
   budget: decimal("budget", { precision: 10, scale: 2 }).notNull(), // 预算金额
-  // 视频号任务特殊字段
   isVideoTask: int("isVideoTask").default(0).notNull(), // 是否为视频号任务
   basePrice: decimal("basePrice", { precision: 10, scale: 2 }), // 基础价格
   pricePerThousandViews: decimal("pricePerThousandViews", { precision: 10, scale: 2 }), // 每千次阅读加价
   deadline: timestamp("deadline").notNull(), // 截止时间
-  // 状态: pending(待审核) / approved(已审核-进行中) / in_progress(已接单) / submitted(待验收) / completed(已完成) / rejected(已拒绝) / cancelled(已取消)
   status: mysqlEnum("status", ["pending", "approved", "in_progress", "submitted", "completed", "rejected", "cancelled"]).default("pending").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updatedAt").default(sql`CURRENT_TIMESTAMP`).onUpdateNow().notNull(),
 });
 
 /**
@@ -84,7 +82,6 @@ export const orders = mysqlTable("orders", {
   id: int("id").autoincrement().primaryKey(),
   taskId: int("taskId").notNull(),
   individualId: int("individualId").notNull(), // 接单者ID
-  // 状态: in_progress(进行中) / submitted(已提交待验收) / completed(已完成) / rejected(被拒绝需修改)
   status: mysqlEnum("status", ["in_progress", "submitted", "completed", "rejected"]).default("in_progress").notNull(),
   submitContent: text("submitContent"), // 提交内容/说明
   submitAttachments: text("submitAttachments"), // 提交附件(JSON格式)
@@ -93,8 +90,8 @@ export const orders = mysqlTable("orders", {
   reviewTime: timestamp("reviewTime"), // 验收时间
   actualAmount: decimal("actualAmount", { precision: 10, scale: 2 }), // 实际结算金额(视频号任务根据阅读量计算)
   viewCount: int("viewCount"), // 视频阅读量(仅视频号任务)
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updatedAt").default(sql`CURRENT_TIMESTAMP`).onUpdateNow().notNull(),
 });
 
 /**
@@ -105,11 +102,10 @@ export const reviews = mysqlTable("reviews", {
   orderId: int("orderId").notNull(),
   reviewerId: int("reviewerId").notNull(), // 评价人用户ID
   revieweeId: int("revieweeId").notNull(), // 被评价人用户ID
-  // 评价类型: enterprise_to_individual(企业评价个人) / individual_to_enterprise(个人评价企业)
   reviewType: mysqlEnum("reviewType", ["enterprise_to_individual", "individual_to_enterprise"]).notNull(),
   rating: int("rating").notNull(), // 星级评分(1-5)
   comment: text("comment"), // 评价内容
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 /**
@@ -118,13 +114,12 @@ export const reviews = mysqlTable("reviews", {
 export const transactions = mysqlTable("transactions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  // 类型: recharge(充值) / freeze(冻结) / unfreeze(解冻) / pay(支付) / income(收入) / withdraw(提现)
   type: mysqlEnum("type", ["recharge", "freeze", "unfreeze", "pay", "income", "withdraw"]).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   balance: decimal("balance", { precision: 10, scale: 2 }).notNull(), // 交易后余额
   relatedId: int("relatedId"), // 关联ID(任务ID或订单ID)
   description: varchar("description", { length: 255 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 export type User = typeof users.$inferSelect;
