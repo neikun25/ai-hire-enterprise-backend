@@ -1,5 +1,5 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal } from "drizzle-orm/mysql-core";
-import { sql } from "drizzle-orm"; // 【关键修复】：引入 sql
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, datetime } from "drizzle-orm/mysql-core";
+import { sql } from "drizzle-orm";
 
 /**
  * 用户表 - 支持企业和个人两种角色
@@ -14,7 +14,6 @@ export const users = mysqlTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }),
   // 角色: enterprise(企业) / individual(个人)
   role: mysqlEnum("role", ["enterprise", "individual", "admin"]).notNull(),
-  // 【关键修复】：使用 sql`CURRENT_TIMESTAMP` 兼容 MySQL 5.7
   createdAt: timestamp("createdAt").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updatedAt").default(sql`CURRENT_TIMESTAMP`).onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -69,7 +68,8 @@ export const tasks = mysqlTable("tasks", {
   isVideoTask: int("isVideoTask").default(0).notNull(), // 是否为视频号任务
   basePrice: decimal("basePrice", { precision: 10, scale: 2 }), // 基础价格
   pricePerThousandViews: decimal("pricePerThousandViews", { precision: 10, scale: 2 }), // 每千次阅读加价
-  deadline: timestamp("deadline").notNull(), // 截止时间
+  // 【关键修复1】：使用 datetime 替代 timestamp
+  deadline: datetime("deadline").notNull(), // 截止时间
   status: mysqlEnum("status", ["pending", "approved", "in_progress", "submitted", "completed", "rejected", "cancelled"]).default("pending").notNull(),
   createdAt: timestamp("createdAt").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updatedAt").default(sql`CURRENT_TIMESTAMP`).onUpdateNow().notNull(),
@@ -85,9 +85,11 @@ export const orders = mysqlTable("orders", {
   status: mysqlEnum("status", ["in_progress", "submitted", "completed", "rejected"]).default("in_progress").notNull(),
   submitContent: text("submitContent"), // 提交内容/说明
   submitAttachments: text("submitAttachments"), // 提交附件(JSON格式)
-  submitTime: timestamp("submitTime"), // 提交时间
+  // 【关键修复2】：使用 datetime 替代 timestamp
+  submitTime: datetime("submitTime"), // 提交时间
   reviewComment: text("reviewComment"), // 验收意见
-  reviewTime: timestamp("reviewTime"), // 验收时间
+  // 【关键修复3】：使用 datetime 替代 timestamp
+  reviewTime: datetime("reviewTime"), // 验收时间
   actualAmount: decimal("actualAmount", { precision: 10, scale: 2 }), // 实际结算金额(视频号任务根据阅读量计算)
   viewCount: int("viewCount"), // 视频阅读量(仅视频号任务)
   createdAt: timestamp("createdAt").default(sql`CURRENT_TIMESTAMP`).notNull(),
