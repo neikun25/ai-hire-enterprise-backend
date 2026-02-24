@@ -1,10 +1,11 @@
 import { publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import * as db from "./db";
+import { getDb } from "./db";
+import { tasks, orders, individuals, users } from "../drizzle/schema"; // 引入需要的表
+import { eq } from "drizzle-orm";
 
-// ========== 演示模式：所有API改为publicProcedure，无需认证 ==========
-// 固定返回李四（企业方）的模拟数据
+// ========== 演示模式：部分API返回模拟数据 ==========
 
 export const enterpriseApiRouter = router({
   // 获取统计数据
@@ -164,4 +165,61 @@ export const enterpriseApiRouter = router({
       }
     };
   }),
+
+  // ==========================================
+  // 获取任务详情（真实数据库查询）
+  // ==========================================
+  getTaskDetail: publicProcedure
+    .input(z.object({
+      taskId: z.number(),
+    }))
+    .query(async ({ input }) => {
+      // 1. 获取数据库实例
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      }
+
+      // 2. 查询任务基本信息
+      const taskResult = await db
+        .select({
+          id: tasks.id,
+          title: tasks.title,
+          type: tasks.type,
+          status: tasks.status,
+          budget: tasks.budget,
+          deadline: tasks.deadline,
+          description: tasks.description,
+          requirements: tasks.requirements,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, input.taskId));
+
+      if (!taskResult || taskResult.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+      }
+
+      const task = taskResult[0];
+
+      // 3. 三表联查：通过 orders(订单) 关联 individuals(个人) 再关联 users(用户)，查出接单人的名字和提交的成果
+      const orderResult = await db
+        .select({
+          acceptedBy: users.name,
+          result: orders.submitContent
+        })
+        .from(orders)
+        .leftJoin(individuals, eq(orders.individualId, individuals.id))
+        .leftJoin(users, eq(individuals.userId, users.id))
+        .where(eq(orders.taskId, input.taskId))
+        .limit(1);
+
+      return {
+        success: true,
+        data: {
+          ...task,
+          acceptedBy: orderResult.length > 0 ? orderResult[0].acceptedBy : null,
+          result: orderResult.length > 0 ? orderResult[0].result : null
+        }
+      };
+    }),
 });
