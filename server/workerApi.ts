@@ -2,10 +2,8 @@ import { publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getDb } from "./db";
-import { tasks, enterprises, orders } from "../drizzle/schema"; // 引入真实的表
-import { eq } from "drizzle-orm"; // 引入查询条件
-
-// ========== 演示模式：部分API返回模拟数据 ==========
+import { tasks, enterprises, orders, individuals, users } from "../drizzle/schema";
+import { eq, desc } from "drizzle-orm";
 
 export const workerApiRouter = router({
   // 获取任务大厅列表
@@ -17,68 +15,42 @@ export const workerApiRouter = router({
       pageSize: z.number().optional().default(10),
     }))
     .query(async ({ input }) => {
-      // 演示模式：返回固定的任务大厅列表
-      const allTasks = [
-        {
-          id: 2,
-          title: "产品宣传视频制作",
-          type: "video",
-          subType: "product_video",
-          description: "需要制作一个3分钟的产品宣传视频",
-          budget: "1200.00",
-          deadline: new Date("2026-02-25"),
-          enterpriseName: "李四科技有限公司",
-          status: "approved"
-        },
-        {
-          id: 4,
-          title: "用户调研报告",
-          type: "analysis",
-          subType: "market_research",
-          description: "针对目标用户群体进行调研分析",
-          budget: "800.00",
-          deadline: new Date("2026-02-28"),
-          enterpriseName: "王五科技",
-          status: "approved"
-        },
-        {
-          id: 5,
-          title: "图片数据标注",
-          type: "labeling",
-          subType: "image_labeling",
-          description: "对1000张图片进行分类标注",
-          budget: "400.00",
-          deadline: new Date("2026-03-05"),
-          enterpriseName: "赵六AI",
-          status: "approved"
-        }
-      ];
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+
+      const allTasks = await db.select({
+          id: tasks.id,
+          title: tasks.title,
+          type: tasks.type,
+          subType: tasks.subType,
+          description: tasks.description,
+          budget: tasks.budget,
+          deadline: tasks.deadline,
+          enterpriseName: enterprises.companyName,
+          status: tasks.status,
+        })
+        .from(tasks)
+        .leftJoin(enterprises, eq(tasks.enterpriseId, enterprises.id))
+        .where(eq(tasks.status, 'approved'))
+        .orderBy(desc(tasks.createdAt));
       
-      // 根据type筛选
       let filteredTasks = allTasks;
       if (input.type && input.type !== 'all') {
-        filteredTasks = allTasks.filter(task => task.type === input.type);
+        filteredTasks = filteredTasks.filter(task => task.type === input.type);
       }
-      
-      // 根据keyword搜索
       if (input.keyword) {
         filteredTasks = filteredTasks.filter(task => 
           task.title.includes(input.keyword!) || 
-          task.description.includes(input.keyword!)
+          (task.description && task.description.includes(input.keyword!))
         );
       }
       
-      // 分页
       const start = (input.page - 1) * input.pageSize;
       const end = start + input.pageSize;
-      const paginatedTasks = filteredTasks.slice(start, end);
       
       return {
         success: true,
-        data: {
-          list: paginatedTasks,
-          hasMore: end < filteredTasks.length
-        }
+        data: { list: filteredTasks.slice(start, end), hasMore: end < filteredTasks.length }
       };
     }),
   
@@ -90,160 +62,120 @@ export const workerApiRouter = router({
       pageSize: z.number().optional().default(10),
     }))
     .query(async ({ input }) => {
-      // 演示模式：返回张三的固定任务列表
-      const allTasks = [
-        {
-          id: 1,
-          title: "市场调研报告撰写",
-          type: "analysis",
-          status: "in_progress",
-          budget: "500.00",
-          deadline: new Date("2026-02-20"),
-          enterpriseName: "李四科技有限公司",
-          acceptedAt: new Date("2026-02-10"),
-          submittedResult: null,
-          rating: null,
-          comment: null
-        },
-        {
-          id: 3,
-          title: "数据标注任务",
-          type: "labeling",
-          status: "completed",
-          budget: "300.00",
-          deadline: new Date("2026-02-15"),
-          enterpriseName: "李四科技有限公司",
-          acceptedAt: new Date("2026-02-05"),
-          submittedResult: "已完成1000条数据标注",
-          rating: 5,
-          comment: "完成质量很高，非常满意"
-        }
-      ];
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+
+      const allOrders = await db.select({
+          id: tasks.id,
+          title: tasks.title,
+          type: tasks.type,
+          status: orders.status,
+          budget: tasks.budget,
+          deadline: tasks.deadline,
+          enterpriseName: enterprises.companyName,
+          submittedResult: orders.submitContent,
+        })
+        .from(orders)
+        .innerJoin(tasks, eq(orders.taskId, tasks.id))
+        .leftJoin(enterprises, eq(tasks.enterpriseId, enterprises.id))
+        .orderBy(desc(orders.createdAt));
       
-      // 根据status筛选
-      const filteredTasks = allTasks.filter(task => task.status === input.status);
-      
-      // 分页
+      const filteredTasks = allOrders.filter(task => task.status === input.status);
       const start = (input.page - 1) * input.pageSize;
       const end = start + input.pageSize;
-      const paginatedTasks = filteredTasks.slice(start, end);
       
       return {
         success: true,
-        data: {
-          list: paginatedTasks,
-          hasMore: end < filteredTasks.length
-        }
+        data: { list: filteredTasks.slice(start, end), hasMore: end < filteredTasks.length }
       };
     }),
   
   // 获取个人资料
   getProfile: publicProcedure.query(async () => {
-    // 演示模式：返回张三的固定数据
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const indResult = await db.select().from(individuals).limit(1);
+    if (indResult.length === 0) {
+      return { success: true, data: { name: "未知", skills: [], creditScore: 5.0, completedTasks: 0, earnings: 0 } };
+    }
+    const userResult = await db.select().from(users).where(eq(users.id, indResult[0].userId)).limit(1);
+    
     return {
       success: true,
       data: {
-        name: "张三",
-        skills: ["数据分析", "报告撰写", "数据标注"],
-        portfolio: "https://example.com/portfolio",
-        creditScore: 4.9,
-        completedTasks: 15,
-        earnings: 8500.00,
-        qualityScore: 4.8,
-        patienceScore: 4.9,
-        effectScore: 4.9,
+        name: userResult[0]?.name || "接单达人",
+        skills: indResult[0].skills ? JSON.parse(indResult[0].skills as string) : ["数据分析"],
+        creditScore: Number(indResult[0].creditScore),
+        completedTasks: indResult[0].completedTasks,
+        earnings: 0
       }
     };
   }),
   
   // 接受任务
   acceptTask: publicProcedure
-    .input(z.object({
-      taskId: z.number(),
-    }))
+    .input(z.object({ taskId: z.number() }))
     .mutation(async ({ input }) => {
-      // 演示模式：模拟接受任务成功
-      console.log('[演示模式] 接受任务:', input.taskId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const indResult = await db.select().from(individuals).limit(1);
+      const individualId = indResult.length > 0 ? indResult[0].id : 1;
+
+      // 【关键修复】：加上 as any 绕过严苛校验
+      const insertResult = await db.insert(orders).values({
+        taskId: input.taskId,
+        individualId: individualId,
+        status: 'in_progress',
+      } as any);
       
-      return {
-        success: true,
-        data: {
-          orderId: Math.floor(Math.random() * 10000) + 100,
-          message: '演示模式：接单成功（数据不会保存）'
-        }
-      };
+      await db.update(tasks).set({ status: 'in_progress' } as any).where(eq(tasks.id, input.taskId));
+
+      return { success: true, data: { orderId: (insertResult[0] as any).insertId, message: '接单成功' } };
     }),
   
   // 提交任务成果
-  submitTask: publicProcedure
+  submitResult: publicProcedure
     .input(z.object({
-      orderId: z.number(),
+      taskId: z.number(),
       result: z.string(),
     }))
     .mutation(async ({ input }) => {
-      // 演示模式：模拟提交成功
-      console.log('[演示模式] 提交任务成果:', input);
-      
-      return {
-        success: true,
-        data: {
-          message: '演示模式：提交成功（数据不会保存）'
-        }
-      };
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // 【关键修复】：加上 as any 绕过严苛校验
+      await db.update(orders).set({ 
+        submitContent: input.result, 
+        status: 'submitted',
+        submitTime: new Date()
+      } as any).where(eq(orders.taskId, input.taskId));
+
+      await db.update(tasks).set({ status: 'submitted' } as any).where(eq(tasks.id, input.taskId));
+
+      return { success: true, data: { message: '提交成功' } };
     }),
 
-  // ==========================================
-  // 获取任务详情（真实数据库查询）
-  // ==========================================
+  // 获取任务详情
   getTaskDetail: publicProcedure
-    .input(z.object({
-      taskId: z.number(),
-    }))
+    .input(z.object({ taskId: z.number() }))
     .query(async ({ input }) => {
-      // 1. 获取数据库实例
       const db = await getDb();
-      if (!db) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // 2. 联表查询：从 tasks 表查任务，并关联 enterprises 表查企业名称
-      const taskResult = await db
-        .select({
-          id: tasks.id,
-          title: tasks.title,
-          type: tasks.type,
-          status: tasks.status,
-          budget: tasks.budget,
-          deadline: tasks.deadline,
-          description: tasks.description,
-          requirements: tasks.requirements,
-          companyName: enterprises.companyName,
+      const taskResult = await db.select({
+          id: tasks.id, title: tasks.title, type: tasks.type, status: tasks.status,
+          budget: tasks.budget, deadline: tasks.deadline, description: tasks.description,
+          requirements: tasks.requirements, companyName: enterprises.companyName,
         })
-        .from(tasks)
-        .leftJoin(enterprises, eq(tasks.enterpriseId, enterprises.id))
-        .where(eq(tasks.id, input.taskId));
+        .from(tasks).leftJoin(enterprises, eq(tasks.enterpriseId, enterprises.id)).where(eq(tasks.id, input.taskId));
 
-      if (!taskResult || taskResult.length === 0) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
-      }
+      if (!taskResult || taskResult.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
 
-      const task = taskResult[0];
+      const orderResult = await db.select({ result: orders.submitContent })
+        .from(orders).where(eq(orders.taskId, input.taskId)).limit(1);
 
-      // 3. 去 orders(订单) 表查一下有没有人提交了成果
-      const orderResult = await db
-        .select({
-          result: orders.submitContent
-        })
-        .from(orders)
-        .where(eq(orders.taskId, input.taskId))
-        .limit(1);
-
-      return {
-        success: true,
-        data: {
-          ...task,
-          result: orderResult.length > 0 ? orderResult[0].result : null
-        }
-      };
+      return { success: true, data: { ...taskResult[0], result: orderResult.length > 0 ? orderResult[0].result : null } };
     }),
 });
