@@ -1,15 +1,28 @@
 import { eq, desc, and, or, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, users, 
-  enterprises, InsertEnterprise, Enterprise,
-  individuals, InsertIndividual, Individual,
-  tasks, InsertTask, Task,
-  orders, InsertOrder, Order,
-  reviews, InsertReview, Review,
-  transactions, InsertTransaction, Transaction
+import {
+  InsertUser,
+  users,
+  enterprises,
+  InsertEnterprise,
+  Enterprise,
+  individuals,
+  InsertIndividual,
+  Individual,
+  tasks,
+  InsertTask,
+  Task,
+  orders,
+  InsertOrder,
+  Order,
+  reviews,
+  InsertReview,
+  Review,
+  transactions,
+  InsertTransaction,
+  Transaction,
 } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -36,24 +49,33 @@ export async function upsertUser(user: any): Promise<void> {
   try {
     const values: Record<string, any> = {
       openId: user.openId,
-      role: user.role || 'individual',
+      role: user.role || null,
       lastSignedIn: user.lastSignedIn || new Date(),
     };
 
-    const textFields = ["name", "email", "loginMethod", "phone", "avatarUrl"] as const;
-    textFields.forEach(field => {
+    const textFields = [
+      "name",
+      "email",
+      "loginMethod",
+      "phone",
+      "avatarUrl",
+    ] as const;
+    textFields.forEach((field) => {
       if (user[field] !== undefined && user[field] !== null) {
         values[field] = user[field];
       }
     });
 
     if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
+      values.role = "admin";
     }
 
-    await db.insert(users).values(values as any).onDuplicateKeyUpdate({
-      set: values,
-    });
+    await db
+      .insert(users)
+      .values(values as any)
+      .onDuplicateKeyUpdate({
+        set: values,
+      });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -61,7 +83,10 @@ export async function upsertUser(user: any): Promise<void> {
 }
 
 // 【新增】用于设置角色
-export async function updateUserRole(userId: number, role: 'individual' | 'enterprise' | 'admin') {
+export async function updateUserRole(
+  userId: number,
+  role: "individual" | "enterprise" | "admin",
+) {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ role }).where(eq(users.id, userId));
@@ -74,7 +99,11 @@ export async function getUserByOpenId(openId: string) {
     return undefined;
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -93,22 +122,32 @@ export async function createEnterprise(data: InsertEnterprise) {
   return result;
 }
 
-export async function getEnterpriseByUserId(userId: number): Promise<Enterprise | undefined> {
+export async function getEnterpriseByUserId(
+  userId: number,
+): Promise<Enterprise | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(enterprises).where(eq(enterprises.userId, userId)).limit(1);
+  const result = await db
+    .select()
+    .from(enterprises)
+    .where(eq(enterprises.userId, userId))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 export async function updateEnterpriseBalance(userId: number, amount: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(enterprises)
+  await db
+    .update(enterprises)
     .set({ balance: sql`balance + ${amount}` } as any)
     .where(eq(enterprises.userId, userId));
 }
 
-export async function updateEnterprise(userId: number, data: Partial<InsertEnterprise>) {
+export async function updateEnterprise(
+  userId: number,
+  data: Partial<InsertEnterprise>,
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(enterprises).set(data).where(eq(enterprises.userId, userId));
@@ -122,14 +161,23 @@ export async function createIndividual(data: InsertIndividual) {
   return result;
 }
 
-export async function getIndividualByUserId(userId: number): Promise<Individual | undefined> {
+export async function getIndividualByUserId(
+  userId: number,
+): Promise<Individual | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(individuals).where(eq(individuals.userId, userId)).limit(1);
+  const result = await db
+    .select()
+    .from(individuals)
+    .where(eq(individuals.userId, userId))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateIndividual(userId: number, data: Partial<InsertIndividual>) {
+export async function updateIndividual(
+  userId: number,
+  data: Partial<InsertIndividual>,
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(individuals).set(data).where(eq(individuals.userId, userId));
@@ -150,31 +198,44 @@ export async function getTaskById(id: number): Promise<Task | undefined> {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getTasksByEnterpriseId(enterpriseId: number, status?: string) {
+export async function getTasksByEnterpriseId(
+  enterpriseId: number,
+  status?: string,
+) {
   const db = await getDb();
   if (!db) return [];
-  
-  let query = db.select().from(tasks).where(eq(tasks.enterpriseId, enterpriseId));
-  
+
+  let query = db
+    .select()
+    .from(tasks)
+    .where(eq(tasks.enterpriseId, enterpriseId));
+
   if (status) {
-    query = db.select().from(tasks).where(
-      and(
-        eq(tasks.enterpriseId, enterpriseId),
-        eq(tasks.status, status as any)
-      )
-    );
+    query = db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.enterpriseId, enterpriseId),
+          eq(tasks.status, status as any),
+        ),
+      );
   }
-  
+
   const result = await query.orderBy(desc(tasks.createdAt));
   return result;
 }
 
-export async function getAvailableTasks(filters?: { type?: string; minBudget?: number; maxBudget?: number }) {
+export async function getAvailableTasks(filters?: {
+  type?: string;
+  minBudget?: number;
+  maxBudget?: number;
+}) {
   const db = await getDb();
   if (!db) return [];
-  
-  const conditions = [eq(tasks.status, 'approved')];
-  
+
+  const conditions = [eq(tasks.status, "approved")];
+
   if (filters?.type) {
     conditions.push(eq(tasks.type, filters.type as any));
   }
@@ -184,11 +245,13 @@ export async function getAvailableTasks(filters?: { type?: string; minBudget?: n
   if (filters?.maxBudget) {
     conditions.push(lte(tasks.budget, filters.maxBudget.toString()));
   }
-  
-  const result = await db.select().from(tasks)
+
+  const result = await db
+    .select()
+    .from(tasks)
     .where(and(...conditions))
     .orderBy(desc(tasks.createdAt));
-  
+
   return result;
 }
 
@@ -209,32 +272,48 @@ export async function createOrder(data: InsertOrder) {
 export async function getOrderById(id: number): Promise<Order | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, id))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 export async function getOrdersByTaskId(taskId: number) {
   const db = await getDb();
   if (!db) return [];
-  const result = await db.select().from(orders).where(eq(orders.taskId, taskId));
+  const result = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.taskId, taskId));
   return result;
 }
 
-export async function getOrdersByIndividualId(individualId: number, status?: string) {
+export async function getOrdersByIndividualId(
+  individualId: number,
+  status?: string,
+) {
   const db = await getDb();
   if (!db) return [];
-  
-  let query = db.select().from(orders).where(eq(orders.individualId, individualId));
-  
+
+  let query = db
+    .select()
+    .from(orders)
+    .where(eq(orders.individualId, individualId));
+
   if (status) {
-    query = db.select().from(orders).where(
-      and(
-        eq(orders.individualId, individualId),
-        eq(orders.status, status as any)
-      )
-    );
+    query = db
+      .select()
+      .from(orders)
+      .where(
+        and(
+          eq(orders.individualId, individualId),
+          eq(orders.status, status as any),
+        ),
+      );
   }
-  
+
   const result = await query.orderBy(desc(orders.createdAt));
   return result;
 }
@@ -256,21 +335,28 @@ export async function createReview(data: InsertReview) {
 export async function getReviewsByRevieweeId(revieweeId: number) {
   const db = await getDb();
   if (!db) return [];
-  const result = await db.select().from(reviews)
+  const result = await db
+    .select()
+    .from(reviews)
     .where(eq(reviews.revieweeId, revieweeId))
     .orderBy(desc(reviews.createdAt));
   return result;
 }
 
-export async function getReviewByOrderId(orderId: number, reviewType: string): Promise<Review | undefined> {
+export async function getReviewByOrderId(
+  orderId: number,
+  reviewType: string,
+): Promise<Review | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(reviews)
+  const result = await db
+    .select()
+    .from(reviews)
     .where(
       and(
         eq(reviews.orderId, orderId),
-        eq(reviews.reviewType, reviewType as any)
-      )
+        eq(reviews.reviewType, reviewType as any),
+      ),
     )
     .limit(1);
   return result.length > 0 ? result[0] : undefined;
@@ -284,10 +370,15 @@ export async function createTransaction(data: InsertTransaction) {
   return result;
 }
 
-export async function getTransactionsByUserId(userId: number, limit: number = 50) {
+export async function getTransactionsByUserId(
+  userId: number,
+  limit: number = 50,
+) {
   const db = await getDb();
   if (!db) return [];
-  const result = await db.select().from(transactions)
+  const result = await db
+    .select()
+    .from(transactions)
     .where(eq(transactions.userId, userId))
     .orderBy(desc(transactions.createdAt))
     .limit(limit);
@@ -298,41 +389,54 @@ export async function getTransactionsByUserId(userId: number, limit: number = 50
 export async function getEnterpriseStats(enterpriseId: number) {
   const db = await getDb();
   if (!db) return null;
-  
-  const allTasks = await db.select().from(tasks).where(eq(tasks.enterpriseId, enterpriseId));
+
+  const allTasks = await db
+    .select()
+    .from(tasks)
+    .where(eq(tasks.enterpriseId, enterpriseId));
   const totalTasks = allTasks.length;
-  const inProgressTasks = allTasks.filter(t => t.status === 'in_progress').length;
-  const completedTasks = allTasks.filter(t => t.status === 'completed').length;
-  
+  const inProgressTasks = allTasks.filter(
+    (t) => t.status === "in_progress",
+  ).length;
+  const completedTasks = allTasks.filter(
+    (t) => t.status === "completed",
+  ).length;
+
   const enterprise = await getEnterpriseByUserId(enterpriseId);
   const balance = enterprise?.balance ? parseFloat(enterprise.balance) : 0;
-  
+
   return {
     totalTasks,
     inProgressTasks,
     completedTasks,
-    balance
+    balance,
   };
 }
 
 export async function getIndividualStats(individualId: number) {
   const db = await getDb();
   if (!db) return null;
-  
-  const allOrders = await db.select().from(orders).where(eq(orders.individualId, individualId));
-  const completedOrders = allOrders.filter(o => o.status === 'completed');
+
+  const allOrders = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.individualId, individualId));
+  const completedOrders = allOrders.filter((o) => o.status === "completed");
   const completedTasks = completedOrders.length;
-  
+
   const totalOrders = allOrders.length;
-  const successRate = totalOrders > 0 ? Math.round((completedTasks / totalOrders) * 100) : 0;
-  
+  const successRate =
+    totalOrders > 0 ? Math.round((completedTasks / totalOrders) * 100) : 0;
+
   const individual = await getIndividualByUserId(individualId);
-  const creditScore = individual?.creditScore ? parseFloat(individual.creditScore) : 0;
-  
+  const creditScore = individual?.creditScore
+    ? parseFloat(individual.creditScore)
+    : 0;
+
   return {
     completedTasks,
     successRate,
-    creditScore
+    creditScore,
   };
 }
 
@@ -346,50 +450,52 @@ export async function searchTasks(params: {
 }) {
   const db = await getDb();
   if (!db) return { list: [], total: 0, hasMore: false };
-  
+
   const { keyword, type, status, page = 1, pageSize = 10 } = params;
   const offset = (page - 1) * pageSize;
-  
+
   const conditions = [];
-  
+
   if (status) {
     conditions.push(eq(tasks.status, status as any));
   } else {
-    conditions.push(eq(tasks.status, 'approved'));
+    conditions.push(eq(tasks.status, "approved"));
   }
-  
+
   if (type) {
     conditions.push(eq(tasks.type, type as any));
   }
-  
+
   if (keyword) {
     conditions.push(
       or(
         sql`${tasks.title} LIKE ${`%${keyword}%`}`,
-        sql`${tasks.description} LIKE ${`%${keyword}%`}`
-      )!
+        sql`${tasks.description} LIKE ${`%${keyword}%`}`,
+      )!,
     );
   }
-  
+
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-  
-  const countResult = await db.select({ count: sql<number>`count(*)` })
+
+  const countResult = await db
+    .select({ count: sql<number>`count(*)` })
     .from(tasks)
     .where(whereClause);
   const total = countResult[0]?.count || 0;
-  
-  const list = await db.select()
+
+  const list = await db
+    .select()
     .from(tasks)
     .where(whereClause)
     .orderBy(desc(tasks.createdAt))
     .limit(pageSize + 1)
     .offset(offset);
-  
+
   const hasMore = list.length > pageSize;
   if (hasMore) {
     list.pop();
   }
-  
+
   return { list, total, hasMore, page, pageSize };
 }
 
@@ -401,35 +507,37 @@ export async function getTasksWithOrders(params: {
 }) {
   const db = await getDb();
   if (!db) return { list: [], total: 0, hasMore: false };
-  
+
   const { enterpriseId, status, page = 1, pageSize = 10 } = params;
   const offset = (page - 1) * pageSize;
-  
+
   const conditions = [eq(tasks.enterpriseId, enterpriseId)];
-  
-  if (status && status !== 'all') {
+
+  if (status && status !== "all") {
     conditions.push(eq(tasks.status, status as any));
   }
-  
+
   const whereClause = and(...conditions);
-  
-  const countResult = await db.select({ count: sql<number>`count(*)` })
+
+  const countResult = await db
+    .select({ count: sql<number>`count(*)` })
     .from(tasks)
     .where(whereClause);
   const total = countResult[0]?.count || 0;
-  
-  const list = await db.select()
+
+  const list = await db
+    .select()
     .from(tasks)
     .where(whereClause)
     .orderBy(desc(tasks.createdAt))
     .limit(pageSize + 1)
     .offset(offset);
-  
+
   const hasMore = list.length > pageSize;
   if (hasMore) {
     list.pop();
   }
-  
+
   return { list, total, hasMore, page, pageSize };
 }
 
@@ -441,45 +549,61 @@ export async function getMyTasksWithDetails(params: {
 }) {
   const db = await getDb();
   if (!db) return { list: [], total: 0, hasMore: false };
-  
+
   const { individualId, status, page = 1, pageSize = 10 } = params;
   const offset = (page - 1) * pageSize;
-  
-  const orderStatus = status === 'in_progress' ? 'in_progress' : 
-                      status === 'submitted' ? 'submitted' : 
-                      status === 'completed' ? 'completed' : status;
-  
+
+  const orderStatus =
+    status === "in_progress"
+      ? "in_progress"
+      : status === "submitted"
+        ? "submitted"
+        : status === "completed"
+          ? "completed"
+          : status;
+
   const conditions = [
     eq(orders.individualId, individualId),
-    eq(orders.status, orderStatus as any)
+    eq(orders.status, orderStatus as any),
   ];
-  
+
   const whereClause = and(...conditions);
-  
-  const countResult = await db.select({ count: sql<number>`count(*)` })
+
+  const countResult = await db
+    .select({ count: sql<number>`count(*)` })
     .from(orders)
     .where(whereClause);
   const total = countResult[0]?.count || 0;
-  
-  const orderList = await db.select()
+
+  const orderList = await db
+    .select()
     .from(orders)
     .where(whereClause)
     .orderBy(desc(orders.createdAt))
     .limit(pageSize + 1)
     .offset(offset);
-  
+
   const hasMore = orderList.length > pageSize;
   if (hasMore) {
     orderList.pop();
   }
-  
-  const taskIds = orderList.map(o => o.taskId);
-  const taskList = taskIds.length > 0 
-    ? await db.select().from(tasks).where(sql`${tasks.id} IN (${sql.join(taskIds.map(id => sql`${id}`), sql`, `)})`)
-    : [];
-  
-  const list = orderList.map(order => {
-    const task = taskList.find(t => t.id === order.taskId);
+
+  const taskIds = orderList.map((o) => o.taskId);
+  const taskList =
+    taskIds.length > 0
+      ? await db
+          .select()
+          .from(tasks)
+          .where(
+            sql`${tasks.id} IN (${sql.join(
+              taskIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})`,
+          )
+      : [];
+
+  const list = orderList.map((order) => {
+    const task = taskList.find((t) => t.id === order.taskId);
     return {
       ...task,
       orderId: order.id,
@@ -487,9 +611,9 @@ export async function getMyTasksWithDetails(params: {
       submitContent: order.submitContent,
       submitAttachments: order.submitAttachments,
       reviewComment: order.reviewComment,
-      actualAmount: order.actualAmount
+      actualAmount: order.actualAmount,
     };
   });
-  
+
   return { list, total, hasMore, page, pageSize };
 }
