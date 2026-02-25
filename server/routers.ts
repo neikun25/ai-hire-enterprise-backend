@@ -63,19 +63,23 @@ export const appRouter = router({
         }
       }),
 
+    // 设置角色（接收前端传来的公司名，支持双重身份共存）
     setRole: publicProcedure
       .input(
         z.object({
           role: z.enum(["individual", "enterprise"]),
           userId: z.number().optional(),
+          companyName: z.string().optional(), // 允许前端传公司名
         }),
       )
       .mutation(async ({ input, ctx }) => {
         const userId = ctx.user?.id || input.userId;
         if (!userId) throw new Error("未找到用户，请重新登录");
 
+        // 更新当前激活的身份
         await db.updateUserRole(userId, input.role);
 
+        // 智能建档：同一个 userId 可以同时拥有个人表和企业表的数据！
         if (input.role === "individual") {
           const exist = await db.getIndividualByUserId(userId);
           if (!exist)
@@ -90,9 +94,9 @@ export const appRouter = router({
           if (!exist)
             await db.createEnterprise({
               userId: userId,
-              companyName: "新注册企业",
+              companyName: input.companyName || "我的企业",
               creditScore: "5.0",
-              balance: "0.00",
+              balance: "10000.00",
             } as any);
         }
         return { success: true, data: { role: input.role } };
@@ -110,16 +114,12 @@ export const appRouter = router({
             .optional(),
         }),
       )
-      // 【注意这里】：解构出 ctx 上下文，用来读取请求头
       .mutation(async ({ input, ctx }) => {
         try {
-          // 1. 微信云托管专属绝招：直接从网关注入的 header 拿真实的 openid！
           const wxHeader = ctx.req?.headers["x-wx-openid"];
           let realOpenId = Array.isArray(wxHeader) ? wxHeader[0] : wxHeader;
 
-          // 2. 如果本地调试没经过网关，用兜底请求去换取
           if (!realOpenId) {
-            // 强行关闭 Node.js 的严格证书校验，避免自签名证书报错
             process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
             try {
               const wechatRes = await code2Session(input.code);
@@ -129,16 +129,11 @@ export const appRouter = router({
             }
           }
 
-          // 3. 如果环境变量全都没配，最后再用随机码（一般不会走到这了）
-          if (!realOpenId) {
-            realOpenId = `wx_${input.code}`;
-          }
+          if (!realOpenId) realOpenId = `wx_${input.code}`;
 
-          let isNewUser = false;
           let user = await db.getUserByOpenId(realOpenId);
 
           if (!user) {
-            isNewUser = true;
             await db.upsertUser({
               openId: realOpenId,
               name: input.userInfo?.nickName || "微信用户",
@@ -177,7 +172,9 @@ export const appRouter = router({
                 openId: user.openId,
                 name: user.name,
                 avatarUrl: user.avatarUrl,
-                role: isNewUser ? null : user.role,
+                // 【核心秘诀】：无论老用户还是新用户，发给前端时一律设为 null
+                // 这样前端登录后必定向角色选择页跳转，让你自由切换身份！
+                role: null,
               },
             },
           };
