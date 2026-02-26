@@ -1,4 +1,4 @@
-import { publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getDb } from "./db";
@@ -12,6 +12,7 @@ import {
 import { eq, desc } from "drizzle-orm";
 
 export const workerApiRouter = router({
+  // 任务大厅（所有人可见，保持 publicProcedure）
   getMarketTasks: publicProcedure
     .input(
       z.object({
@@ -68,7 +69,8 @@ export const workerApiRouter = router({
       };
     }),
 
-  getMyTasks: publicProcedure
+  // 我的任务（必须登录，且只查自己的单子）
+  getMyTasks: protectedProcedure
     .input(
       z.object({
         status: z.enum(["in_progress", "submitted", "completed"]),
@@ -76,9 +78,20 @@ export const workerApiRouter = router({
         pageSize: z.number().optional().default(10),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // 【数据隔离】：通过 ctx.user.id 找到属于当前登录人的个人档案
+      const indResult = await db
+        .select()
+        .from(individuals)
+        .where(eq(individuals.userId, ctx.user.id))
+        .limit(1);
+
+      if (indResult.length === 0) {
+        return { success: true, data: { list: [], hasMore: false } };
+      }
 
       const allOrders = await db
         .select({
@@ -94,6 +107,8 @@ export const workerApiRouter = router({
         .from(orders)
         .innerJoin(tasks, eq(orders.taskId, tasks.id))
         .leftJoin(enterprises, eq(tasks.enterpriseId, enterprises.id))
+        // 【数据隔离】：只查当前个人档案下的订单
+        .where(eq(orders.individualId, indResult[0].id))
         .orderBy(desc(orders.createdAt));
 
       const filteredTasks = allOrders.filter(
@@ -109,10 +124,16 @@ export const workerApiRouter = router({
       };
     }),
 
-  getProfile: publicProcedure.query(async () => {
+  getProfile: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const indResult = await db.select().from(individuals).limit(1);
+
+    const indResult = await db
+      .select()
+      .from(individuals)
+      .where(eq(individuals.userId, ctx.user.id))
+      .limit(1);
+
     if (indResult.length === 0)
       return {
         success: true,
@@ -124,16 +145,11 @@ export const workerApiRouter = router({
           earnings: 0,
         },
       };
-    const userResult = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, indResult[0].userId))
-      .limit(1);
 
     return {
       success: true,
       data: {
-        name: userResult[0]?.name || "接单达人",
+        name: ctx.user.name || "接单达人",
         skills: indResult[0].skills
           ? JSON.parse(indResult[0].skills as string)
           : ["数据分析"],
@@ -144,23 +160,33 @@ export const workerApiRouter = router({
     };
   }),
 
-  acceptTask: publicProcedure
+  acceptTask: protectedProcedure
     .input(z.object({ taskId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const indResult = await db.select().from(individuals).limit(1);
-      const individualId = indResult.length > 0 ? indResult[0].id : 1;
+
+      const indResult = await db
+        .select()
+        .from(individuals)
+        .where(eq(individuals.userId, ctx.user.id))
+        .limit(1);
+
+      if (indResult.length === 0) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "档案未建立" });
+      }
 
       const insertResult = await db.insert(orders).values({
         taskId: input.taskId,
-        individualId: individualId,
+        individualId: indResult[0].id, // 绑定到自己
         status: "in_progress",
       } as any);
+
       await db
         .update(tasks)
         .set({ status: "in_progress" } as any)
         .where(eq(tasks.id, input.taskId));
+
       return {
         success: true,
         data: {
@@ -170,8 +196,7 @@ export const workerApiRouter = router({
       };
     }),
 
-  // 提交成果（支持附件存储）
-  submitResult: publicProcedure
+  submitResult: protectedProcedure
     .input(
       z.object({
         taskId: z.number(),
@@ -203,8 +228,7 @@ export const workerApiRouter = router({
       return { success: true, data: { message: "提交成功" } };
     }),
 
-  // 获取详情（带附件和驳回理由）
-  getTaskDetail: publicProcedure
+  getTaskDetail: protectedProcedure
     .input(z.object({ taskId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
